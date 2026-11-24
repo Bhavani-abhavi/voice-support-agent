@@ -80,7 +80,15 @@ THINKING ──tool calls──▶ RUNNING_TOOLS ──▶ THINKING … (≤ 6 s
    * **LLM judge:** temperature 0, strict JSON schema, returns `grounded` and `unsupported_claims`.
    * **On failure:** the draft is retracted in the UI, an escalation ticket is created, and the customer gets a handoff message. A verifier outage marks the answer `unverified`, and borderline answers fail closed.
 
-Thresholds are a property of the embedding model, so they're calibrated rather than hand-picked. `scripts/calibrate.py` embeds labelled in-scope and out-of-scope questions and suggests the escalate/answer cut-offs (see `app/config.py: DEFAULT_THRESHOLDS`).
+Thresholds are a property of the embedding model, so they're calibrated rather than hand-picked. `scripts/calibrate.py` embeds 20 labelled questions and suggests the cut-offs. With `text-embedding-3-small`:
+
+| | top-1 similarity |
+|---|---|
+| 12 in-scope support questions | 0.43 to 0.72 |
+| 8 out-of-scope questions (weather, taxes, laptops, flights…) | 0.05 to 0.23 |
+| **escalate below / answer at** | **0.30 / 0.40** (inside the 0.20-wide gap) |
+
+The gap is wide on this corpus. With a bigger knowledge base I'd re-run calibration on real traffic and track escalation precision/recall.
 
 ### Voice
 

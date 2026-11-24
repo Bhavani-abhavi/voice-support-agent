@@ -19,7 +19,7 @@ BACKEND_DIR = Path(__file__).resolve().parent.parent
 # hashing embedder. Calibrated with scripts/calibrate.py (see README).
 DEFAULT_THRESHOLDS: dict[str, tuple[float, float]] = {
     # backend: (escalate_below, answer_at_or_above)
-    "openai": (0.30, 0.42),
+    "openai": (0.30, 0.40),  # calibrated: in-scope top-1 >= 0.43, out-of-scope <= 0.23 (12 vs 8 labelled queries)
     "hash": (0.165, 0.20),  # offline bag-of-words embedder; overlaps more, so it escalates more
 }
 
