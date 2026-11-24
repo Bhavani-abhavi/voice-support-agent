@@ -140,6 +140,10 @@ export default function App() {
           dispatch({ type: "drop_if_empty", id });
         }
       },
+      onInterrupted: (responseId) => {
+        const id = voiceMsg.current.get(responseId);
+        if (id) dispatch({ type: "assistant_done", id, interrupted: true });
+      },
       onToolStart: (responseId, callId, name) => {
         const id = voiceMsg.current.get(responseId);
         if (!id) return;

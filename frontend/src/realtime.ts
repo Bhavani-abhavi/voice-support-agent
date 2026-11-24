@@ -15,6 +15,7 @@ export interface RealtimeCallbacks {
   onAssistantStart: (responseId: string) => void;
   onAssistantDelta: (responseId: string, delta: string) => void;
   onAssistantDone: (responseId: string, text: string, interrupted: boolean) => void;
+  onInterrupted: (responseId: string) => void;
   onToolStart: (responseId: string, callId: string, name: string) => void;
   onToolEnd: (callId: string, result: Awaited<ReturnType<typeof voiceTool>> | null, error?: string) => void;
   onTrace: (trace: Trace) => void;
@@ -44,8 +45,56 @@ export class RealtimeClient {
   private tFirstAudio = 0;
   private timer?: number;
   private closed = false;
+  private responseActive = false;
+  private lastResponseId = "";
+  private audioItem: { id: string; playStart: number } | null = null;
+  private muted = false;
+  private interruptAt = 0;
 
   constructor(private cb: RealtimeCallbacks) {}
+
+  /** Agent audio is audible: server playback events, or energy on the remote track as a fallback. */
+  private agentAudible(): boolean {
+    if (this.speaking) return true;
+    const node = this.outAnalyser;
+    if (!node) return false;
+    const buf = new Uint8Array(node.fftSize);
+    node.getByteTimeDomainData(buf);
+    let sum = 0;
+    for (const v of buf) {
+      const d = (v - 128) / 128;
+      sum += d * d;
+    }
+    return Math.sqrt(sum / buf.length) > 0.02;
+  }
+
+  /**
+   * Barge-in. The model generates speech faster than real time, so by the time the
+   * customer cuts in the response is often already complete and only the buffered
+   * audio is still playing: cancelling the response alone isn't enough. So: mute
+   * locally first (instant), then cancel, clear the server's output buffer, and
+   * truncate the assistant item to what was actually heard so the model's context
+   * matches reality.
+   */
+  private bargeIn() {
+    this.interruptAt = performance.now();
+    if (this.audio) this.audio.muted = true;
+    this.muted = true;
+    if (this.responseActive) this.send({ type: "response.cancel" });
+    this.send({ type: "output_audio_buffer.clear" });
+    if (this.audioItem?.playStart) {
+      this.send({
+        type: "conversation.item.truncate",
+        item_id: this.audioItem.id,
+        content_index: 0,
+        audio_end_ms: Math.max(0, Math.round(performance.now() - this.audioItem.playStart)),
+      });
+    }
+    this.audioItem = null;
+    this.speaking = false;
+    for (const id of this.assistantText.keys()) this.interrupted.add(id);
+    if (this.lastResponseId) this.cb.onInterrupted(this.lastResponseId);
+  }
 
   private setState(s: VoiceState) {
     this.state = s;
@@ -120,11 +169,7 @@ export class RealtimeClient {
   private handle(ev: Evt) {
     switch (ev.type) {
       case "input_audio_buffer.speech_started": {
-        if (this.speaking) {
-          // Barge-in: the server cancels the response (interrupt_response); stop local audio too.
-          this.send({ type: "output_audio_buffer.clear" });
-          for (const id of this.assistantText.keys()) this.interrupted.add(id);
-        }
+        if (this.responseActive || this.agentAudible()) this.bargeIn();
         this.cb.onUserSpeechStart(ev.item_id);
         this.setState("user_speaking");
         break;
@@ -149,24 +194,38 @@ export class RealtimeClient {
         break;
       }
       case "response.created":
+        this.responseActive = true;
+        this.lastResponseId = ev.response.id;
+        if (this.muted && this.audio) {
+          this.audio.muted = false; // the new answer should be heard
+          this.muted = false;
+        }
         this.assistantText.set(ev.response.id, "");
         this.cb.onAssistantStart(ev.response.id);
+        break;
+      case "response.output_item.added":
+        if (ev.item?.type === "message" && ev.item?.role === "assistant") {
+          this.audioItem = { id: ev.item.id, playStart: 0 };
+        }
         break;
       case "response.output_audio_transcript.delta":
       case "response.audio_transcript.delta": {
         const id = ev.response_id;
+        if (this.audioItem && !this.audioItem.playStart) this.audioItem.playStart = performance.now();
         this.assistantText.set(id, (this.assistantText.get(id) ?? "") + ev.delta);
         this.cb.onAssistantDelta(id, ev.delta);
         break;
       }
       case "output_audio_buffer.started":
         this.speaking = true;
+        if (this.audioItem) this.audioItem.playStart = performance.now();
         if (!this.tFirstAudio) this.tFirstAudio = performance.now();
         this.setState("speaking");
         break;
       case "output_audio_buffer.stopped":
       case "output_audio_buffer.cleared":
         this.speaking = false;
+        this.audioItem = null;
         if (this.state === "speaking") this.setState("listening");
         break;
       case "response.function_call_arguments.done": {
@@ -189,6 +248,7 @@ export class RealtimeClient {
       case "response.done": {
         const r = ev.response ?? {};
         const id: string = r.id;
+        this.responseActive = false;
         const wasInterrupted = r.status === "cancelled" || this.interrupted.has(id);
         const text = this.assistantText.get(id) ?? "";
         this.assistantText.delete(id);
@@ -218,7 +278,9 @@ export class RealtimeClient {
       }
       case "error": {
         const code = ev.error?.code ?? "";
-        if (code === "response_cancel_not_active" || code === "invalid_value" && /clear/i.test(ev.error?.message ?? "")) break;
+        // Cancel/clear/truncate race the server during a barge-in; "nothing to cancel" is expected.
+        const duringBargeIn = performance.now() - this.interruptAt < 2000;
+        if (code === "response_cancel_not_active" || duringBargeIn) break;
         console.warn("realtime error", ev.error);
         this.cb.onError(ev.error?.message ?? "Voice error");
         break;
