@@ -2,7 +2,7 @@
 
 A fullstack customer-support AI agent for a fictional note-taking SaaS, **Orbit Notes**. One agent core serves two interfaces, **streaming chat (SSE)** and **live voice (OpenAI Realtime over WebRTC)**. Both share the same session memory, tools and guardrails. The agent chains tools autonomously, refuses to guess when retrieval confidence is low, and streams every step to an observability drawer.
 
-**Live demo:** _<add Render URL>_ · **Walkthrough:** _<add Loom URL>_
+**Live demo:** https://voice-support-agent-tszn.onrender.com (free tier: the first load after idle takes ~50 s) · **Walkthrough:** _<add Loom URL>_
 
 
 ---
@@ -13,7 +13,8 @@ A fullstack customer-support AI agent for a fictional note-taking SaaS, **Orbit 
 |---|---|---|
 | Duplicate charge | "I was charged twice this month. I'm alex.rivera@example.com, ZIP 64111." | 4-tool chain: verify → search policies → list invoices → refund, with live step status |
 | Policy question | "What happens to my notes if my payment fails?" | RAG answer with clickable citations, grounding badge |
-| Out of scope | "Can you help me pick a laptop?" | Retrieval below threshold → passages withheld → escalation ticket |
+| Not in the knowledge base | "Do you have a public API for developers?" | Retrieval below threshold → passages withheld → escalation ticket |
+| Unrelated question | "Can you help me pick a laptop?" | Polite scope reply; no ticket wasted on non-Orbit questions |
 | Above the agent's limit | "I'm priya.shah@example.com, ZIP 94107. Refund INV-2201, the full $12,000." | Code-enforced limit → `requires_human` → high-priority ticket |
 | Outside refund window | "I'm sam.lee@example.com, ZIP 10001. Refund my annual plan." | Policy denial with the reason and the policy cited |
 | Failure drills | Sidebar → *Simulate failure* | Flaky tool (retry succeeds), billing system down, LLM 429, LLM timeout |
@@ -79,6 +80,8 @@ THINKING ──tool calls──▶ RUNNING_TOOLS ──▶ THINKING … (≤ 6 s
    * **Deterministic citation check:** every `[doc:n]` cited must have been retrieved this turn.
    * **LLM judge:** temperature 0, strict JSON schema, returns `grounded` and `unsupported_claims`.
    * **On failure:** the draft is retracted in the UI, an escalation ticket is created, and the customer gets a handoff message. A verifier outage marks the answer `unverified`, and borderline answers fail closed.
+
+**Similarity is not answerability.** Questions that mention the brand ("Does Orbit Notes integrate with Slack?") score high (0.51) because of topical overlap even though no policy covers them. So the high band also carries an instruction to treat results that don't actually answer the question as low confidence, and the grounding verifier backs that up by rejecting any claim the passages don't state.
 
 Thresholds are a property of the embedding model, so they're calibrated rather than hand-picked. `scripts/calibrate.py` embeds 20 labelled questions and suggests the cut-offs. With `text-embedding-3-small`:
 

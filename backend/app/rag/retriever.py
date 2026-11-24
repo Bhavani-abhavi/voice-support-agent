@@ -40,9 +40,11 @@ class RetrievalResult:
                 "top_score": round(self.top_score, 3),
                 "results": [],
                 "instruction": (
-                    "No policy matched with enough confidence. Do not answer from general "
-                    "knowledge. Tell the customer you will connect them with a specialist "
-                    "and call create_escalation_ticket."
+                    "No policy matched with enough confidence. Do not answer from general knowledge. "
+                    "If the question is about Orbit Notes (the product, an account, billing or support), "
+                    "tell the customer you'll connect them with a specialist and call create_escalation_ticket. "
+                    "If it has nothing to do with Orbit Notes (weather, shopping, homework...), politely say "
+                    "you can only help with Orbit Notes questions and do NOT create a ticket."
                 ),
             }
         return {
@@ -57,7 +59,11 @@ class RetrievalResult:
                 }
                 for h in self.hits
             ],
-            "instruction": "Answer only from these results and cite the ids you used, like [refunds:2].",
+            "instruction": (
+                "Answer only from these results and cite the ids you used. Similar wording is not an answer: "
+                "if these results don't actually answer the question, say the policies don't cover it and "
+                "treat it as low confidence (offer a specialist via create_escalation_ticket)."
+            ),
         }
 
 

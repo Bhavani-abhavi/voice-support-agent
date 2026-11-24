@@ -20,6 +20,9 @@ from .base import LLMResult, OnToken, ToolCall, Usage
 _EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+")
 _ZIP = re.compile(r"\b\d{5}\b")
 _INVOICE = re.compile(r"\bINV-\d+\b", re.I)
+_DOMAIN = re.compile(
+    r"orbit|note|notebook|plan|\bpro\b|business|account|billing|invoice|refund|charge|sync|\bapp\b|"
+    r"subscription|export|password|data|team|share|integrat|\bapi\b|discount|device|support|login|cancel", re.I)
 
 
 def _intent(text: str) -> str:
@@ -157,6 +160,9 @@ class MockProvider:
         if "search_policies" not in done:
             return self._call("search_policies", {"query": user_text})
         result = done["search_policies"]
+        if (result["confidence"] == "low" or not result.get("results")) and not _DOMAIN.search(user_text):
+            return ("I can only help with Orbit Notes questions, like plans, billing, refunds, sync or your account. "
+                    "Is there anything about Orbit Notes I can help with?")
         if result["confidence"] == "low" or not result.get("results"):
             return self._call("create_escalation_ticket", {
                 "summary": f"Question not covered by the knowledge base: {user_text[:160]}", "category": "other", "priority": "normal"})

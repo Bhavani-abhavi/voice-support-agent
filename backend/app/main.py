@@ -33,7 +33,8 @@ log = logging.getLogger("support_agent")
 SAMPLE_PROMPTS = [
     {"label": "Charged twice (full tool chain)", "text": "Hi, I think I was charged twice this month. Can I get a refund? I'm alex.rivera@example.com, ZIP 64111."},
     {"label": "Policy question", "text": "What happens to my notes if my payment fails?"},
-    {"label": "Out of scope (guardrail)", "text": "Can you help me pick a good laptop for college?"},
+    {"label": "Not in the knowledge base", "text": "Do you have a public API for developers?"},
+    {"label": "Unrelated question", "text": "Can you help me pick a good laptop for college?"},
     {"label": "Above agent limit", "text": "I'm priya.shah@example.com, ZIP 94107. Please refund invoice INV-2201, the full $12,000."},
     {"label": "Outside refund window", "text": "I'm sam.lee@example.com, ZIP 10001. I want a refund for my annual plan."},
 ]
@@ -215,7 +216,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     if (static / "index.html").exists():
         app.mount("/assets", StaticFiles(directory=static / "assets"), name="assets")
 
-        @app.get("/{path:path}", include_in_schema=False)
+        @app.api_route("/{path:path}", methods=["GET", "HEAD"], include_in_schema=False)
         async def spa(path: str) -> FileResponse:
             candidate = static / path
             if path and candidate.is_file() and static.resolve() in candidate.resolve().parents:

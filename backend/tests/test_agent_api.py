@@ -26,8 +26,15 @@ def test_memory_carries_across_turns(chat):
     assert "verify_customer" not in names(ev, "tool_start")
 
 
-def test_out_of_scope_escalates(chat):
+def test_unrelated_question_declines_without_ticket(chat):
     ev = chat("Can you recommend a laptop for college?")
+    assert names(ev, "tool_start") == ["search_policies"]
+    assert not any(e == "escalation" for e, _ in ev)
+    assert "only help with Orbit Notes" in next(d for e, d in ev if e == "final")["text"]
+
+
+def test_in_domain_question_missing_from_kb_escalates(chat):
+    ev = chat("Do you have a public API for developers?")
     assert names(ev, "tool_start") == ["search_policies", "create_escalation_ticket"]
     assert any(e == "escalation" for e, _ in ev)
     assert next(d for e, d in ev if e == "trace")["outcome"] == "escalated"
