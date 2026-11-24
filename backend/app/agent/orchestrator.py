@@ -98,7 +98,7 @@ class AgentOrchestrator:
                 escalated = escalated or await self._escalate(
                     ctx, trace, emit, chunks, tool_evidence, f"Agent could not complete the request: {user_text[:200]}", "other"
                 )
-                final_text = self._handoff_text(escalated, failed=False)
+                final_text = self._handoff_text(escalated, failed=False, tool_evidence=tool_evidence)
                 await emit("final", {"text": final_text, "replaced": True})
                 verdict = Verdict("grounded", "handoff", "Handoff message; no factual claims.")
             else:
@@ -108,7 +108,7 @@ class AgentOrchestrator:
                         ctx, trace, emit, chunks, tool_evidence,
                         f"Answer failed grounding check ({verdict.reason[:120]}). Customer asked: {user_text[:200]}", "other",
                     )
-                    final_text = self._handoff_text(escalated, failed=False, retracted=True)
+                    final_text = self._handoff_text(escalated, failed=False, retracted=True, tool_evidence=tool_evidence)
                     await emit("final", {"text": final_text, "replaced": True})
                 else:
                     await emit("final", {"text": final_text, "replaced": False})
@@ -250,9 +250,25 @@ class AgentOrchestrator:
         return min((r["confidence"] for r in ctx.retrievals), key=order.__getitem__)
 
     @staticmethod
-    def _handoff_text(ticket: dict[str, Any] | None, failed: bool, retracted: bool = False) -> str:
-        lead = "I want to be sure you get an accurate answer, so rather than guess, " if retracted else ""
+    def _completed_actions(tool_evidence: list[dict[str, Any]]) -> str:
+        """Facts taken verbatim from successful tool outputs, so a handoff never hides an action that happened."""
+        done = []
+        for t in tool_evidence:
+            o = t["output"]
+            if t["tool"] == "issue_refund" and o.get("status") == "refunded":
+                done.append(f"Your refund of ${o['amount_usd']:.2f} for {o['invoice_id']} is done (reference {o['refund_id']}); "
+                            f"it arrives in {o['arrives']}.")
+            elif t["tool"] == "update_account_field" and o.get("status") == "updated":
+                done.append(f"I've updated your {o['field'].replace('_', ' ')}.")
+        return " ".join(done) + (" " if done else "")
+
+    @classmethod
+    def _handoff_text(cls, ticket: dict[str, Any] | None, failed: bool, retracted: bool = False,
+                      tool_evidence: list[dict[str, Any]] | None = None) -> str:
+        done = cls._completed_actions(tool_evidence or [])
+        lead = "To be sure everything else you hear is accurate, " if retracted and done else (
+            "I want to be sure you get an accurate answer, so rather than guess, " if retracted else "")
         if not ticket or "ticket_id" not in ticket:
-            return lead + "I wasn't able to complete that. Please try again in a moment, or ask for a human agent."
-        return (f"{lead}I've passed this to a human specialist: ticket {ticket['ticket_id']} ({ticket['priority']} priority). "
+            return done + lead + "I wasn't able to complete that. Please try again in a moment, or ask for a human agent."
+        return (f"{done}{lead}I've passed this to a human specialist: ticket {ticket['ticket_id']} ({ticket['priority']} priority). "
                 f"You'll hear back within {ticket['first_response_sla']}, and they'll have the full context.")

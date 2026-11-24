@@ -122,6 +122,8 @@ async def _search(args: SearchArgs, ctx: ToolContext) -> dict:
             "latency_ms": round(result.latency_ms, 1),
         }
     )
+    if result.confidence != "low":
+        ctx.session.policy_checked = True
     return result.to_tool_output()
 
 
@@ -152,6 +154,12 @@ def _refund_limit(customer, invoice, today) -> tuple[float, str | None, str]:
 async def _issue_refund(args: RefundArgs, ctx: ToolContext) -> dict:
     customer = ctx.session.customer
     assert customer
+    if not ctx.session.policy_checked:
+        # Mirrors refunds policy: "Agents never promise a refund before checking the invoice and this policy."
+        return {
+            "status": "policy_not_checked",
+            "reason": "Look up the refund policy with search_policies before issuing a refund, then try again.",
+        }
     invoice = next((i for i in customer.invoices if i.id.upper() == args.invoice_id.upper()), None)
     if not invoice:
         return {"status": "denied", "reason": f"Invoice {args.invoice_id} is not on this account."}

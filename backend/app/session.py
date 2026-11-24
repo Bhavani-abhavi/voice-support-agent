@@ -41,6 +41,7 @@ class Session:
     last_seen: float = field(default_factory=time.time)
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     voice_sessions_started: int = 0
+    policy_checked: bool = False  # a confident search_policies result exists in this session
     voice_pending: dict = field(default_factory=lambda: {"spans": [], "retrievals": []})
 
     def add(self, message: dict[str, Any], mode: str) -> None:

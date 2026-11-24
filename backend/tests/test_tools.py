@@ -19,7 +19,15 @@ def ctx():
 
 
 async def verify(ctx, email="alex.rivera@example.com", zip_code="64111"):
-    return await execute("verify_customer", {"email": email, "zip_code": zip_code}, ctx)
+    out = await execute("verify_customer", {"email": email, "zip_code": zip_code}, ctx)
+    ctx.session.policy_checked = True  # tests below exercise refund rules, not the lookup gate
+    return out
+
+
+async def test_refund_blocked_until_policy_checked(ctx):
+    await execute("verify_customer", {"email": "alex.rivera@example.com", "zip_code": "64111"}, ctx)
+    out = await execute("issue_refund", {"invoice_id": "INV-1043", "amount_usd": 12, "reason": "duplicate"}, ctx)
+    assert out.output["status"] == "policy_not_checked"
 
 
 async def test_account_tools_require_verification(ctx):
