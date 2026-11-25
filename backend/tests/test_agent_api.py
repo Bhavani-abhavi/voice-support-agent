@@ -59,9 +59,14 @@ def test_citation_check_catches_invented_sources():
     assert invented == ["refunds:9"]
 
 
-def test_rate_limiter_returns_429(client):
-    sid = client.post("/api/sessions").json()["session_id"]
-    codes = [client.post("/api/chat", json={"session_id": sid, "message": "hi"}).status_code for _ in range(22)]
+def test_rate_limiter_returns_429():
+    from fastapi.testclient import TestClient
+    from app.config import Settings
+    from app.main import create_app
+    app = create_app(Settings(llm_provider="mock", openai_api_key="", rate_limit_chat_per_min=5))
+    with TestClient(app) as client:
+        sid = client.post("/api/sessions").json()["session_id"]
+        codes = [client.post("/api/chat", json={"session_id": sid, "message": "hi"}).status_code for _ in range(7)]
     assert 429 in codes
 
 

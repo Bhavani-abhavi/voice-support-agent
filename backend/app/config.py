@@ -62,9 +62,9 @@ class Settings(BaseSettings):
     tool_max_retries: int = 1
 
     # --- abuse protection --------------------------------------------------------
-    rate_limit_chat_per_min: int = 20
-    rate_limit_voice_sessions_per_10min: int = 6
-    rate_limit_voice_events_per_min: int = 240
+    rate_limit_chat_per_min: int = 60
+    rate_limit_voice_sessions_per_10min: int = 40
+    rate_limit_voice_events_per_min: int = 1200
     voice_max_session_s: int = 300
     max_message_chars: int = 2000
     session_ttl_s: int = 7200
