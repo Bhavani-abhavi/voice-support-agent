@@ -111,6 +111,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "demo_accounts": DEMO_ACCOUNTS,
             "sample_prompts": SAMPLE_PROMPTS,
             "voice_max_session_s": settings.voice_max_session_s,
+            "rate_limits": {"chat_per_min": settings.rate_limit_chat_per_min, "voice_sessions_per_10min": settings.rate_limit_voice_sessions_per_10min},
         }
 
     # -- sessions -------------------------------------------------------------------
