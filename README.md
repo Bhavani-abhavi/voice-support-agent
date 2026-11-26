@@ -2,7 +2,7 @@
 
 A fullstack customer-support AI agent for a fictional note-taking SaaS, **Orbit Notes**. One agent core serves two interfaces, **streaming chat (SSE)** and **live voice (OpenAI Realtime over WebRTC)**. Both share the same session memory, tools and guardrails. The agent chains tools autonomously, refuses to guess when retrieval confidence is low, and streams every step to an observability drawer.
 
-**Live demo:** https://voice-support-agent-tszn.onrender.com (free tier: the first load after idle takes ~50 s) · **Walkthrough:** _<add Loom URL>_
+**Live demo:** https://voice-support-agent-tszn.onrender.com (free tier: the first load after idle takes ~50 s) · **Walkthrough (Loom):** https://www.loom.com/share/49a80213edf849b8a2e49c56eeca12f5
 
 
 ---
